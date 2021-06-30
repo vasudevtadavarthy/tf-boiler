@@ -26,7 +26,6 @@ pipeline {
                         }
                     }
                 }
-                sh 'terraform version'
                 withAWS(credentials: 'aws-credentials', region: 'eu-west-2') {
                     sh '/var/jenkins_home/terraform version'
                 }
