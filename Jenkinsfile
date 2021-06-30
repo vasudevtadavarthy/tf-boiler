@@ -1,68 +1,41 @@
 pipeline {
-  agent any
-  tools {
-      terraform 'terraform'
-  }
-//   parameters {
-//     password (name: 'AWS_ACCESS_KEY_ID')
-//     password (name: 'AWS_SECRET_ACCESS_KEY')
-//     password (name: 'AWS_SESSION_TOKEN')
-//   }
-  environment {
-    TF_WORKSPACE = 'dev' //Sets the Terraform Workspace
-    TF_IN_AUTOMATION = 'true'
-//     AWS_ACCESS_KEY_ID = "${params.AWS_ACCESS_KEY_ID}"
-//     AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY}"
-//     AWS_SESSION_TOKEN = "${params.AWS_SESSION_TOKEN}"
-  }
-  stages {
-
-        stage('Init') {
-            steps {
-                script {
-                    def changesExist = -1
-                    def target = "${params.target}"
-                    env.targetString = ""
-                    if (target != '') {
-                        target.split(",").each { moduleName ->
-                            env.targetString += "-target ${moduleName} "
-                        }
-                    }
-                }
-                withAWS(credentials: 'aws-credentials', region: 'eu-west-2') {
-                    sh 'terraform version'
-                }
-            }
-        }
-
-     stage('git checkout test') {
-        steps {
-          sh "ls -la && pwd && terraform version"
-          sh 'printenv'
-
-        }
-
-      }
-
-    stage('Terraform Init') {
-      steps {
-      withAWS(credentials: 'aws-credentials', region: 'eu-west-2') {
-            dir ('infra'){
-                sh "terraform init -backend-config=bucket=vasudev-terraform-dev -backend-config=key=terraform.tfstate -backend-config=region=eu-west-2 -backend-config=profile=nexmo-dev -input=false"
-            }
-        }
-      }
+    agent any
+    tools {
+        terraform 'terraform'
     }
-// //     stage('Terraform Plan') {
-// //       steps {
-// //         sh "cd infra && /var/jenkins_home/terraform plan -var-file='../env/region/eu-west-2/dev.tf' -var=aws_region=eu-west-2 -out=tfplan -input=false"
-// //       }
-// //     }
-// //     stage('Terraform Apply') {
-// //       steps {
-// //         input 'Apply Plan'
-// //         sh "cd infra && /var/jenkins_home/terraform apply -input=false tfplan"
-// //       }
-// //     }
-//   }
-// }
+    parameters {
+        password(name: 'AWS_ACCESS_KEY_ID')
+        password(name: 'AWS_SECRET_ACCESS_KEY')
+        password(name: 'AWS_SESSION_TOKEN')
+    }
+    environment {
+        //     TF_WORKSPACE = 'dev' //Sets the Terraform Workspace
+        TF_IN_AUTOMATION = 'true'
+        AWS_ACCESS_KEY_ID = "${params.AWS_ACCESS_KEY_ID}"
+        AWS_SECRET_ACCESS_KEY = "${params.AWS_SECRET_ACCESS_KEY}"
+        AWS_SESSION_TOKEN = "${params.AWS_SESSION_TOKEN}"
+    }
+    stages {
+        stage('Terraform commands') {
+            steps {
+                 sh '''
+                    CWD=$(pwd)
+
+                    for REGION in $(cd $CWD/env/region && ls)
+                    do
+                      for ENV in $(cd $CWD/env/region/$REGION && ls)
+                      do
+                    #      //aws switch context
+                          echo "switch AWS account for every $ENV && region $REGION"
+                          cd $CWD/infra
+                          terraform init -reconfigure -backend-config=bucket=vasudev-terraform-dev -backend-config=key=$REGION-$ENV-terraform.tfstate -backend-config=region='eu-west-2' -input=false
+                          terraform plan -var-file=../env/region/$REGION/$ENV -var=aws_region=$REGION -out=tfplan -input=false
+                    #      terraform apply -input=false tfplan
+                          rm -r .terraform/ tfplan
+                      done
+                    done
+                 '''
+            }
+        }
+    }
+}
