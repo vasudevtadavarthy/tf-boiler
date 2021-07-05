@@ -1,2 +1,2 @@
 # tf-boiler
-terraform pipeline poc to deploy to different accounts and regions
+Terraform pipeline using jenkins to deploy to different AWS accounts and regions
